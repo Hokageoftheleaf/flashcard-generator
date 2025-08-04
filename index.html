@@ -116,17 +116,19 @@
             });
         }
 
-        // Study Mode: show one card, type the back, check answer
         function renderStudyMode() {
             const section = document.getElementById('studyModeSection');
             section.innerHTML = '';
             if (currentMode !== 'study') { section.style.display = 'none'; return; }
-            section.style.display = '';
+            section.style.display = 'block';
             const cards = flashcardSets[currentSetName];
             if (!cards.length) { section.innerHTML = '<div>No cards to study.</div>'; return; }
+            
+            // Initialize study order if empty or length doesn't match
             if (!studyOrder.length || studyOrder.length !== cards.length) {
-                studyOrder = Array.from(Array(cards.length).keys());
+                studyOrder = Array.from({length: cards.length}, (_, i) => i);
             }
+            
             const card = cards[studyOrder[studyIndex]];
             section.innerHTML = `
                 <div class="study-front">Front: ${card.front}</div>
@@ -136,6 +138,7 @@
                 <div class="study-result" id="studyResult"></div>
                 <div style="margin-top:7px;color:#888;">Card ${studyIndex+1} of ${cards.length}</div>
             `;
+            
             document.getElementById('studyCheckBtn').onclick = function() {
                 const userAns = document.getElementById('studyInput').value.trim();
                 const correctAns = card.back.trim();
@@ -146,13 +149,24 @@
                     resultDiv.innerHTML = "<span style='color:#ef4444;font-weight:bold;'>Incorrect.</span> <br>Correct answer: <b>" + correctAns + "</b>";
                 }
             };
+            
             document.getElementById('studyNextBtn').onclick = function() {
                 studyIndex = (studyIndex + 1) % cards.length;
                 renderStudyMode();
             };
+            
             document.getElementById('studyInput').onkeypress = function(e) {
                 if (e.key === "Enter") document.getElementById('studyCheckBtn').click();
             };
+        }
+
+        // Shuffle function - Fisher-Yates algorithm
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
         }
 
         // Controls
@@ -165,6 +179,8 @@
             saveSets();
             updateSetsSelect();
             document.getElementById('textInput').value = "";
+            studyIndex = 0;
+            studyOrder = [];
             renderFlashcards();
             renderStudyMode();
         };
@@ -174,6 +190,7 @@
             currentSetName = select.value;
             document.getElementById('textInput').value = flashcardSets[currentSetName].map(c => `${c.front} | ${c.back}`).join('\n');
             studyIndex = 0;
+            studyOrder = [];
             saveSets();
             updateSetsSelect();
             renderFlashcards();
@@ -189,6 +206,7 @@
                 updateSetsSelect();
                 document.getElementById('textInput').value = flashcardSets[currentSetName].map(c => `${c.front} | ${c.back}`).join('\n');
                 studyIndex = 0;
+                studyOrder = [];
                 renderFlashcards();
                 renderStudyMode();
             }
@@ -197,6 +215,7 @@
         document.getElementById('updateSetBtn').onclick = function() {
             flashcardSets[currentSetName] = parseFlashcardsFromText(document.getElementById('textInput').value);
             studyIndex = 0;
+            studyOrder = [];
             saveSets();
             updateSetsSelect();
             renderFlashcards();
@@ -204,19 +223,21 @@
         };
 
         document.getElementById('shuffleBtn').onclick = function() {
-            let arr = flashcardSets[currentSetName];
-            for(let i=arr.length-1;i>0;i--){
-                let j = Math.floor(Math.random()*(i+1));
-                [arr[i],arr[j]]=[arr[j],arr[i]];
-            }
-            studyOrder = Array.from(Array(arr.length).keys());
+            const currentSet = flashcardSets[currentSetName];
+            if (currentSet.length === 0) return;
+            // Shuffle the set in place
+            shuffleArray(currentSet);
+            // Update studyOrder as sequential (or shuffle it independently if you want study mode to use separate shuffle)
+            studyOrder = Array.from({length: currentSet.length}, (_, i) => i);
+            // If you want study mode to be shuffled too, use: studyOrder = shuffleArray(studyOrder);
             studyIndex = 0;
+            // Update the text input area to reflect shuffled order
+            document.getElementById('textInput').value = currentSet.map(c => `${c.front} | ${c.back}`).join('\n');
             saveSets();
             renderFlashcards();
             renderStudyMode();
         };
 
-        // Mode switching
         document.getElementById('modeCardBtn').onclick = function() {
             currentMode = 'card';
             this.classList.add('active');
@@ -224,6 +245,7 @@
             renderFlashcards();
             renderStudyMode();
         };
+        
         document.getElementById('modeStudyBtn').onclick = function() {
             currentMode = 'study';
             this.classList.add('active');
@@ -233,7 +255,7 @@
         };
 
         // Initial demo data
-        if (!flashcardSets["Default Set"].length) {
+        if (!flashcardSets["Default Set"] || flashcardSets["Default Set"].length === 0) {
             flashcardSets["Default Set"] = [
                 {front:"Photosynthesis", back:"Plants convert sunlight into energy"},
                 {front:"Mitochondria", back:"Powerhouse of the cell"},
