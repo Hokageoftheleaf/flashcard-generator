@@ -3,12 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Set Flashcard Generator</title>
+    <title>Multi-Set Flashcard Generator (Accounts)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); min-height: 100vh; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; }
         .container { max-width: 1100px; margin: 0 auto; background: #fff; border-radius: 18px; box-shadow: 0 10px 30px #0002; padding: 32px 20px; }
         h1 { text-align: center; margin-bottom: 6px; color: #2575fc; }
+        .auth-box { max-width: 400px; margin: 40px auto 0 auto; background: #f8f9ff; border-radius: 16px; box-shadow: 0 2px 10px #0001; padding: 28px 22px; }
+        .auth-box h2 { margin-bottom: 12px; color: #2575fc; }
+        .auth-box input { width: 100%; margin-bottom: 12px; padding: 11px; border-radius: 7px; border: 1px solid #ccc; font-size: 1rem; }
+        .auth-box button { width: 100%; padding: 13px; border-radius: 7px; border: none; background: #6a11cb; color: #fff; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+        .auth-box button.secondary { background: #10b981; }
+        .auth-error { color: #ef4444; font-size: 0.98rem; margin-bottom: 8px; }
+        .account { text-align: right; margin-bottom: 12px; }
+        .account span { margin-right: 14px; font-weight:600; color:#2575fc;}
+        .account button { background: #ef4444; color:#fff; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; }
         .set-controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
         .set-controls input, .set-controls select { padding: 9px; border-radius: 7px; border: 1px solid #ccc; }
         .set-controls button { padding: 9px 22px; border-radius: 7px; border: none; background: #6a11cb; color: #fff; font-weight: 600; cursor: pointer; transition: background 0.2s; }
@@ -34,7 +43,11 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="mainApp" style="display:none;">
+        <div class="account" id="accountInfo">
+            <span id="loggedUser"></span>
+            <button id="logoutBtn">Logout</button>
+        </div>
         <h1><i class="fas fa-clone"></i> Multi-Set Flashcard Generator</h1>
         <div class="set-controls">
             <input type="text" id="setNameInput" placeholder="New Set Name">
@@ -54,21 +67,143 @@
         <div id="flashcardContainer" class="flashcard-container"></div>
         <div id="studyModeSection" class="study-mode" style="display:none;"></div>
     </div>
+    <div class="auth-box" id="authBox">
+        <h2>Welcome to Flashcard App</h2>
+        <div id="authError" class="auth-error"></div>
+        <input type="text" id="authUsername" placeholder="Username" autocomplete="username">
+        <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+        <button id="loginBtn"><i class="fas fa-sign-in-alt"></i> Login</button>
+        <button id="registerBtn" class="secondary"><i class="fas fa-user-plus"></i> Register</button>
+    </div>
     <script>
-        // In-memory flashcard sets (localStorage for persistence)
-        let flashcardSets = JSON.parse(localStorage.getItem('flashcardSets') || '{}');
-        let currentSetName = Object.keys(flashcardSets)[0] || "Default Set";
-        if (!flashcardSets[currentSetName]) {
-            flashcardSets[currentSetName] = [];
+        // Simple hash for password (not secure, but better than plaintext)
+        function simpleHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash |= 0; // Convert to 32bit integer
+            }
+            return hash.toString();
         }
+
+        // User/account management
+        function getAllUsers() {
+            return JSON.parse(localStorage.getItem('flashcardUsers') || '{}');
+        }
+        function saveAllUsers(users) {
+            localStorage.setItem('flashcardUsers', JSON.stringify(users));
+        }
+
+        let currentUser = null;
+        let flashcardSets = {};
+        let currentSetName = "";
         let currentMode = 'card'; // 'card' or 'study'
         let studyIndex = 0;
         let studyOrder = [];
 
-        function saveSets() {
-            localStorage.setItem('flashcardSets', JSON.stringify(flashcardSets));
+        // Show/hide UI
+        function showMainApp() {
+            document.getElementById('authBox').style.display = 'none';
+            document.getElementById('mainApp').style.display = '';
+            document.getElementById('loggedUser').textContent = currentUser;
+        }
+        function showAuth() {
+            document.getElementById('authBox').style.display = '';
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('authError').textContent = '';
+            document.getElementById('authUsername').value = '';
+            document.getElementById('authPassword').value = '';
         }
 
+        // Login/Register/Logout functions
+        document.getElementById('loginBtn').onclick = function() {
+            const username = document.getElementById('authUsername').value.trim();
+            const password = document.getElementById('authPassword').value;
+            if (!username || !password) {
+                document.getElementById('authError').textContent = "Please enter username and password.";
+                return;
+            }
+            const users = getAllUsers();
+            if (!users[username]) {
+                document.getElementById('authError').textContent = "Username not found.";
+                return;
+            }
+            if (users[username].password !== simpleHash(password)) {
+                document.getElementById('authError').textContent = "Incorrect password.";
+                return;
+            }
+            currentUser = username;
+            flashcardSets = users[username].sets || {};
+            if (Object.keys(flashcardSets).length === 0) {
+                flashcardSets["Default Set"] = [
+                    {front:"Photosynthesis", back:"Plants convert sunlight into energy"},
+                    {front:"Mitochondria", back:"Powerhouse of the cell"},
+                    {front:"Newton's First Law", back:"Objects in motion stay in motion"},
+                    {front:"GDP", back:"Total value of goods/services in a country"},
+                    {front:"Renaissance", back:"Italian cultural movement, 14th century"},
+                    {front:"HTML", back:"Markup language for web pages"}
+                ];
+            }
+            currentSetName = Object.keys(flashcardSets)[0];
+            studyIndex = 0;
+            studyOrder = [];
+            showMainApp();
+            updateSetsSelect();
+            document.getElementById('textInput').value = flashcardSets[currentSetName].map(c => `${c.front} | ${c.back}`).join('\n');
+            renderFlashcards();
+            renderStudyMode();
+        };
+
+        document.getElementById('registerBtn').onclick = function() {
+            const username = document.getElementById('authUsername').value.trim();
+            const password = document.getElementById('authPassword').value;
+            if (!username || !password) {
+                document.getElementById('authError').textContent = "Please enter username and password.";
+                return;
+            }
+            const users = getAllUsers();
+            if (users[username]) {
+                document.getElementById('authError').textContent = "Username already exists.";
+                return;
+            }
+            users[username] = {
+                password: simpleHash(password),
+                sets: {
+                    "Default Set": [
+                        {front:"Photosynthesis", back:"Plants convert sunlight into energy"},
+                        {front:"Mitochondria", back:"Powerhouse of the cell"},
+                        {front:"Newton's First Law", back:"Objects in motion stay in motion"},
+                        {front:"GDP", back:"Total value of goods/services in a country"},
+                        {front:"Renaissance", back:"Italian cultural movement, 14th century"},
+                        {front:"HTML", back:"Markup language for web pages"}
+                    ]
+                }
+            };
+            saveAllUsers(users);
+            document.getElementById('authError').textContent = "Account created! Please login.";
+            // Optionally, auto-log in: currentUser = username; ...
+        };
+
+        document.getElementById('logoutBtn').onclick = function() {
+            // Save sets before logout
+            saveCurrentUserSets();
+            currentUser = null;
+            flashcardSets = {};
+            currentSetName = "";
+            studyIndex = 0;
+            studyOrder = [];
+            showAuth();
+        };
+
+        function saveCurrentUserSets() {
+            if (currentUser) {
+                const users = getAllUsers();
+                users[currentUser].sets = flashcardSets;
+                saveAllUsers(users);
+            }
+        }
+
+        // Flashcard logic (just like before, but per user)
         function updateSetsSelect() {
             const select = document.getElementById('setsSelect');
             select.innerHTML = '';
@@ -123,12 +258,9 @@
             section.style.display = 'block';
             const cards = flashcardSets[currentSetName];
             if (!cards.length) { section.innerHTML = '<div>No cards to study.</div>'; return; }
-            
-            // Initialize study order if empty or length doesn't match
             if (!studyOrder.length || studyOrder.length !== cards.length) {
                 studyOrder = Array.from({length: cards.length}, (_, i) => i);
             }
-            
             const card = cards[studyOrder[studyIndex]];
             section.innerHTML = `
                 <div class="study-front">Front: ${card.front}</div>
@@ -138,7 +270,6 @@
                 <div class="study-result" id="studyResult"></div>
                 <div style="margin-top:7px;color:#888;">Card ${studyIndex+1} of ${cards.length}</div>
             `;
-            
             document.getElementById('studyCheckBtn').onclick = function() {
                 const userAns = document.getElementById('studyInput').value.trim();
                 const correctAns = card.back.trim();
@@ -149,12 +280,10 @@
                     resultDiv.innerHTML = "<span style='color:#ef4444;font-weight:bold;'>Incorrect.</span> <br>Correct answer: <b>" + correctAns + "</b>";
                 }
             };
-            
             document.getElementById('studyNextBtn').onclick = function() {
                 studyIndex = (studyIndex + 1) % cards.length;
                 renderStudyMode();
             };
-            
             document.getElementById('studyInput').onkeypress = function(e) {
                 if (e.key === "Enter") document.getElementById('studyCheckBtn').click();
             };
@@ -176,7 +305,7 @@
             if (flashcardSets[name]) return alert("Set name exists!");
             flashcardSets[name] = [];
             currentSetName = name;
-            saveSets();
+            saveCurrentUserSets();
             updateSetsSelect();
             document.getElementById('textInput').value = "";
             studyIndex = 0;
@@ -191,7 +320,7 @@
             document.getElementById('textInput').value = flashcardSets[currentSetName].map(c => `${c.front} | ${c.back}`).join('\n');
             studyIndex = 0;
             studyOrder = [];
-            saveSets();
+            saveCurrentUserSets();
             updateSetsSelect();
             renderFlashcards();
             renderStudyMode();
@@ -202,7 +331,7 @@
             if (confirm("Delete set '" + currentSetName + "'?")) {
                 delete flashcardSets[currentSetName];
                 currentSetName = Object.keys(flashcardSets)[0];
-                saveSets();
+                saveCurrentUserSets();
                 updateSetsSelect();
                 document.getElementById('textInput').value = flashcardSets[currentSetName].map(c => `${c.front} | ${c.back}`).join('\n');
                 studyIndex = 0;
@@ -216,7 +345,7 @@
             flashcardSets[currentSetName] = parseFlashcardsFromText(document.getElementById('textInput').value);
             studyIndex = 0;
             studyOrder = [];
-            saveSets();
+            saveCurrentUserSets();
             updateSetsSelect();
             renderFlashcards();
             renderStudyMode();
@@ -225,15 +354,11 @@
         document.getElementById('shuffleBtn').onclick = function() {
             const currentSet = flashcardSets[currentSetName];
             if (currentSet.length === 0) return;
-            // Shuffle the set in place
             shuffleArray(currentSet);
-            // Update studyOrder as sequential (or shuffle it independently if you want study mode to use separate shuffle)
             studyOrder = Array.from({length: currentSet.length}, (_, i) => i);
-            // If you want study mode to be shuffled too, use: studyOrder = shuffleArray(studyOrder);
             studyIndex = 0;
-            // Update the text input area to reflect shuffled order
             document.getElementById('textInput').value = currentSet.map(c => `${c.front} | ${c.back}`).join('\n');
-            saveSets();
+            saveCurrentUserSets();
             renderFlashcards();
             renderStudyMode();
         };
@@ -245,7 +370,7 @@
             renderFlashcards();
             renderStudyMode();
         };
-        
+
         document.getElementById('modeStudyBtn').onclick = function() {
             currentMode = 'study';
             this.classList.add('active');
@@ -254,24 +379,8 @@
             renderStudyMode();
         };
 
-        // Initial demo data
-        if (!flashcardSets["Default Set"] || flashcardSets["Default Set"].length === 0) {
-            flashcardSets["Default Set"] = [
-                {front:"Photosynthesis", back:"Plants convert sunlight into energy"},
-                {front:"Mitochondria", back:"Powerhouse of the cell"},
-                {front:"Newton's First Law", back:"Objects in motion stay in motion"},
-                {front:"GDP", back:"Total value of goods/services in a country"},
-                {front:"Renaissance", back:"Italian cultural movement, 14th century"},
-                {front:"HTML", back:"Markup language for web pages"}
-            ];
-            saveSets();
-        }
-
-        // Load current set on start
-        updateSetsSelect();
-        document.getElementById('textInput').value = flashcardSets[currentSetName].map(c => `${c.front} | ${c.back}`).join('\n');
-        renderFlashcards();
-        renderStudyMode();
+        // Initial UI
+        showAuth();
     </script>
 </body>
 </html>
