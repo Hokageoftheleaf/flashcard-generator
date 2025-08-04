@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcard Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PDF.js for PDF parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.min.js"></script>
+    <!-- Mammoth.js for Word parsing -->
+    <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- html2canvas for image export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        /* ... The same CSS from your original code ... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #333;
+        }
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        header {
+            text-align: center;
+            color: white;
+            padding: 20px;
+        }
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .app-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .input-section {
+            flex: 1;
+            min-width: 300px;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .output-section {
+            flex: 1;
+            min-width: 300px;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+        }
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title i {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .input-methods {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .method-btn {
+            flex: 1;
+            padding: 12px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .method-btn i {
+            font-size: 1.5rem;
+        }
+        .method-btn.active {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .input-area {
+            display: none;
+        }
+        .input-area.active {
+            display: block;
+        }
+        .text-input textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 1rem;
+            resize: vertical;
+        }
+        .file-input {
+            text-align: center;
+            padding: 30px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-input:hover {
+            border-color: #6a11cb;
+            background: #f8f9ff;
+        }
+        .file-input i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            color: #6a11cb;
+        }
+        .file-input p {
+            margin-bottom: 15px;
+        }
+        .file-input button {
+            padding: 10px 25px;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+        }
+        .file-input button:hover {
+            transform: translateY(-2px);
+        }
+        #fileInput {
+            display: none;
+        }
+        .generate-btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .generate-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        .flashcard-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            overflow-y: auto;
+            max-height: 500px;
+            padding: 10px;
+        }
+        .flashcard {
+            height: 200px;
+            perspective: 1000px;
+            cursor: pointer;
+        }
+        .flashcard-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-radius: 12px;
+        }
+        .flashcard.flipped .flashcard-inner {
+            transform: rotateY(180deg);
+        }
+        .flashcard-front, .flashcard-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            border-radius: 12px;
+        }
+        .flashcard-front {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .flashcard-back {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            color: white;
+            transform: rotateY(180deg);
+            font-size: 1.1rem;
+        }
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        .instructions ul {
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        .download-section {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        .download-btn {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.3s ease;
+        }
+        .download-btn:hover {
+            transform: translateY(-3px);
+        }
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+            .flashcard-container {
+                max-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Flashcard Generator</h1>
+            <p>Create interactive flashcards by typing content, uploading PDFs, or Word documents</p>
+        </header>
+        <div class="app-container">
+            <div class="input-section">
+                <div class="section-title">
+                    <i class="fas fa-edit"></i>
+                    <h2>Create Flashcards</h2>
+                </div>
+                <div class="input-methods">
+                    <button class="method-btn active" data-method="text">
+                        <i class="fas fa-font"></i>
+                        Text Input
+                    </button>
+                    <button class="method-btn" data-method="pdf">
+                        <i class="fas fa-file-pdf"></i>
+                        PDF Upload
+                    </button>
+                    <button class="method-btn" data-method="word">
+                        <i class="fas fa-file-word"></i>
+                        Word Upload
+                    </button>
+                </div>
+                <div class="input-area text-input active">
+                    <textarea id="textInput" placeholder="Enter your flashcard content here. Use the format: 
+Front of card 1 | Back of card 1
+Front of card 2 | Back of card 2
+..."></textarea>
+                </div>
+                <div class="input-area pdf-input">
+                    <div class="file-input" id="pdfUploadArea">
+                        <i class="fas fa-file-pdf"></i>
+                        <p>Upload a PDF file to create flashcards</p>
+                        <p><small>Supported formats: .pdf</small></p>
+                        <button type="button">Choose PDF File</button>
+                        <input type="file" id="pdfInput" accept=".pdf">
+                    </div>
+                </div>
+                <div class="input-area word-input">
+                    <div class="file-input" id="wordUploadArea">
+                        <i class="fas fa-file-word"></i>
+                        <p>Upload a Word document to create flashcards</p>
+                        <p><small>Supported formats: .doc, .docx</small></p>
+                        <button type="button">Choose Word File</button>
+                        <input type="file" id="wordInput" accept=".doc,.docx">
+                    </div>
+                </div>
+                <button class="generate-btn" id="generateBtn">
+                    <i class="fas fa-bolt"></i> Generate Flashcards
+                </button>
+                <div class="instructions">
+                    <h3>How to use:</h3>
+                    <ul>
+                        <li>For text input: Enter each flashcard on a new line using the format: "Front | Back"</li>
+                        <li>For PDF/Word upload: Upload your document and we'll extract content to create flashcards</li>
+                        <li>Click on any flashcard to flip it and see the back side</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="output-section">
+                <div class="section-title">
+                    <i class="fas fa-clone"></i>
+                    <h2>Your Flashcards</h2>
+                </div>
+                <div class="flashcard-container" id="flashcardContainer">
+                    <div class="placeholder-text">
+                        <p>Your flashcards will appear here after generation</p>
+                    </div>
+                </div>
+                <div class="download-section">
+                    <button class="download-btn" id="exportPdfBtn">
+                        <i class="fas fa-file-pdf"></i> Export as PDF
+                    </button>
+                    <button class="download-btn" id="exportImageBtn">
+                        <i class="fas fa-image"></i> Export as Image
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Helper to parse flashcards from text
+        function parseFlashcardsFromText(text) {
+            const lines = text.split('\n');
+            const flashcards = [];
+            lines.forEach(line => {
+                const parts = line.split('|');
+                if (parts.length === 2) {
+                    flashcards.push({
+                        front: parts[0].trim(),
+                        back: parts[1].trim()
+                    });
+                }
+            });
+            return flashcards;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Input method switching
+            const methodButtons = document.querySelectorAll('.method-btn');
+            const inputAreas = document.querySelectorAll('.input-area');
+            let activeMethod = "text";
+            let uploadedFlashcards = []; // holds flashcards from PDF/Word
+
+            methodButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const method = button.getAttribute('data-method');
+                    activeMethod = method;
+                    // Update active button
+                    methodButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    // Show corresponding input area
+                    inputAreas.forEach(area => area.classList.remove('active'));
+                    document.querySelector(`.${method}-input`).classList.add('active');
+                });
+            });
+
+            // File upload triggers
+            document.getElementById('pdfUploadArea').addEventListener('click', (e) => {
+                if (e.target.tagName !== 'BUTTON') return;
+                document.getElementById('pdfInput').click();
+            });
+            document.getElementById('wordUploadArea').addEventListener('click', (e) => {
+                if (e.target.tagName !== 'BUTTON') return;
+                document.getElementById('wordInput').click();
+            });
+
+            // PDF file input handler
+            document.getElementById('pdfInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async function() {
+                    const typedarray = new Uint8Array(reader.result);
+                    try {
+                        const pdf = await pdfjsLib.getDocument({data: typedarray}).promise;
+                        let text = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const content = await page.getTextContent();
+                            text += content.items.map(item => item.str).join(' ') + '\n';
+                        }
+                        uploadedFlashcards = parseFlashcardsFromText(text);
+                        // Update UI
+                        const uploadArea = document.getElementById('pdfUploadArea');
+                        uploadArea.innerHTML = `
+                            <i class="fas fa-check-circle"></i>
+                            <p>${file.name}</p>
+                            <p><small>Click to change file</small></p>
+                        `;
+                        uploadArea.style.borderColor = '#00b09b';
+                        uploadArea.style.background = '#f0fff4';
+                    } catch (err) {
+                        alert('Failed to parse PDF file.');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            // Word file input handler
+            document.getElementById('wordInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    mammoth.convertToRawText({arrayBuffer: event.target.result})
+                        .then(result => {
+                            uploadedFlashcards = parseFlashcardsFromText(result.value);
+                            // Update UI
+                            const uploadArea = document.getElementById('wordUploadArea');
+                            uploadArea.innerHTML = `
+                                <i class="fas fa-check-circle"></i>
+                                <p>${file.name}</p>
+                                <p><small>Click to change file</small></p>
+                            `;
+                            uploadArea.style.borderColor = '#00b09b';
+                            uploadArea.style.background = '#f0fff4';
+                        })
+                        .catch(() => alert('Failed to parse Word file.'));
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            // Generate flashcards
+            document.getElementById('generateBtn').addEventListener('click', function() {
+                const container = document.getElementById('flashcardContainer');
+                container.innerHTML = '';
+                let flashcards = [];
+                if (activeMethod === 'text') {
+                    const text = document.getElementById('textInput').value;
+                    flashcards = parseFlashcardsFromText(text);
+                } else if (activeMethod === 'pdf' || activeMethod === 'word') {
+                    flashcards = uploadedFlashcards;
+                }
+                if (flashcards.length === 0) {
+                    container.innerHTML = '<div class="placeholder-text"><p>No flashcards generated</p></div>';
+                    return;
+                }
+                flashcards.forEach(card => {
+                    const flashcard = document.createElement('div');
+                    flashcard.className = 'flashcard';
+                    flashcard.innerHTML = `
+                        <div class="flashcard-inner">
+                            <div class="flashcard-front">${card.front}</div>
+                            <div class="flashcard-back">${card.back}</div>
+                        </div>
+                    `;
+                    flashcard.addEventListener('click', function() {
+                        this.classList.toggle('flipped');
+                    });
+                    container.appendChild(flashcard);
+                });
+            });
+
+            // PDF Export
+            document.getElementById('exportPdfBtn').addEventListener('click', () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const container = document.getElementById('flashcardContainer');
+                const flashcards = container.querySelectorAll('.flashcard');
+                let y = 10;
+                let pageHeight = doc.internal.pageSize.height;
+                flashcards.forEach(card => {
+                    const front = card.querySelector('.flashcard-front').textContent;
+                    const back = card.querySelector('.flashcard-back').textContent;
+                    doc.text(`Front: ${front}`, 10, y);
+                    y += 10;
+                    doc.text(`Back: ${back}`, 10, y);
+                    y += 20;
+                    if (y > pageHeight - 20) {
+                        doc.addPage();
+                        y = 10;
+                    }
+                });
+                doc.save('flashcards.pdf');
+            });
+
+            // Image Export
+            document.getElementById('exportImageBtn').addEventListener('click', async () => {
+                const container = document.getElementById('flashcardContainer');
+                html2canvas(container).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = 'flashcards.png';
+                    link.href = canvas.toDataURL();
+                    link.click();
+                });
+            });
+
+            // Demo flashcards on load
+            setTimeout(function() {
+                document.getElementById('textInput').value = 
+`Photosynthesis | The process by which plants convert sunlight into energy
+Mitochondria | Powerhouse of the cell where cellular respiration occurs
+Newton's First Law | An object at rest stays at rest unless acted upon by an external force
+GDP | Gross Domestic Product - total value of goods and services produced in a country
+Renaissance | Cultural movement that started in Italy in the 14th century
+HTML | HyperText Markup Language - standard language for creating web pages`;
+                document.getElementById('generateBtn').click();
+            }, 600);
+        });
+    </script>
+</body>
+</html>
